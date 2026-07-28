@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Личный Журнал Выжившего (iOS)</title>
+
+    <!-- НАСТРОЙКИ PWA ДЛЯ iOS И ANDROID -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PDA Журнал">
+    <link rel="apple-touch-icon" href="https://api.iconify.design/lucide:terminal.svg?color=%239bcc7a">
+    
+    <!-- Динамический манифест для PWA -->
+    <link rel="manifest" id="pwaManifest">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #1a1a1a;
+            color: #ccc;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            height: 100dvh; /* Поддержка динамической высоты на мобильных */
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* КОМПЬЮТЕРНАЯ ВЕРСИЯ (Окно с бортами по умолчанию) */
+        .pda-wrapper {
+            background: #384232;
+            padding: 15px;
+            border-radius: 12px;
+            border: 2px solid #23291f;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(255, 255, 255, 0.05);
+            width: 95%;
+            max-width: 650px;
+            height: 90vh;
+            max-height: 750px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .pda-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #23291f;
+            padding-bottom: 8px;
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .pda-title {
+            color: #9bcc7a;
+            font-weight: bold;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(155, 204, 122, 0.6);
+        }
+
+        .pda-date {
+            color: #b5c7a3;
+            font-size: 0.75rem;
+            opacity: 0.85;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .log-counter {
+            color: #b5c7a3;
+            font-size: 0.85rem;
+            background: #172417;
+            padding: 2px 6px;
+            border-radius: 3px;
+            border: 1px solid #4a5942;
+        }
+
+        .new-journal-btn {
+            background: #2a3325;
+            color: #ff5733;
+            border: 1px solid #5d7051;
+            padding: 3px 8px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.8rem;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: 0.2s;
+        }
+
+        .new-journal-btn:hover {
+            background: #ff5733;
+            color: #fff;
+        }
+
+        .filter-panel {
+            display: flex;
+            gap: 6px;
+            background: #23291f;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #4a5942;
+            flex-shrink: 0;
+        }
+
+        .filter-panel input, .filter-panel select {
+            background: #111;
+            color: #8ed663;
+            border: 1px solid #5d7051;
+            padding: 4px 6px;
+            font-family: inherit;
+            border-radius: 3px;
+            font-size: 12px;
+            outline: none;
+        }
+
+        #filterSearch {
+            flex-grow: 1;
+        }
+
+        #filterColor {
+            width: 130px;
+            cursor: pointer;
+        }
+
+        /* ЭКРАН С ЖУРНАЛОМ */
+        .pda-screen {
+            background: #172417;
+            border: 3px solid #0d140d;
+            border-radius: 5px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.8);
+            flex-grow: 1; /* Динамически занимает всю доступную высоту */
+            display: flex;
+            flex-direction: column;
+            min-height: 150px;
+        }
+
+        .pda-screen::after {
+            content: "";
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .logs-container {
+            height: 100%;
+            padding: 12px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .log-date-divider {
+            text-align: center;
+            color: #799a60;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin: 12px 0 6px 0;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 3px rgba(121, 154, 96, 0.4);
+        }
+
+        .log-date-divider::before,
+        .log-date-divider::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            width: 25%;
+            height: 1px;
+            background: #2b3d22;
+        }
+        .log-date-divider::before { left: 0; }
+        .log-date-divider::after { right: 0; }
+
+        .log-entry {
+            margin-bottom: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            animation: slideUpFade 0.3s forwards ease-out;
+            padding: 5px 8px;
+            border-radius: 3px;
+        }
+
+        .log-content {
+            flex-grow: 1;
+            word-break: break-word;
+            padding-right: 8px;
+        }
+
+        .log-normal {
+            color: #8ed663;
+            text-shadow: 0 0 3px rgba(142, 214, 99, 0.4);
+        }
+
+        .log-important {
+            font-weight: bold;
+            border-left: 4px solid var(--event-color);
+            color: var(--event-color);
+            text-shadow: 0 0 4px var(--event-color);
+            background-color: var(--event-bg);
+        }
+
+        .log-time {
+            color: #b5c7a3;
+            margin-right: 4px;
+            font-weight: normal;
+        }
+
+        .log-author {
+            color: #a4b396;
+            margin-right: 4px;
+            font-style: italic;
+            background: #23291f;
+            padding: 0 3px;
+            border-radius: 2px;
+            border: 1px solid #384232;
+        }
+
+        .log-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            flex-shrink: 0;
+            margin-left: 6px;
+        }
+
+        .delete-btn {
+            background: #23291f;
+            border: 1px solid #4a5942;
+            color: #ff5733;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 2px;
+            transition: 0.2s;
+            text-align: center;
+        }
+
+        .delete-btn:hover {
+            background: #ff5733;
+            color: #fff;
+        }
+
+        .change-btn {
+            background: #23291f;
+            border: 1px solid #4a5942;
+            color: #799a60;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 2px;
+            transition: 0.2s;
+            text-align: center;
+        }
+
+        .change-btn:hover {
+            background: #799a60;
+            color: #111;
+        }
+
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #23291f;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #4a5942;
+            flex-shrink: 0;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        input[type="text"], select {
+            background: #111;
+            color: #8ed663;
+            border: 1px solid #5d7051;
+            padding: 8px;
+            font-family: inherit;
+            border-radius: 3px;
+            outline: none;
+            font-size: 14px;
+        }
+
+        #authorInput {
+            width: 90px;
+            flex-shrink: 0;
+        }
+
+        #logInput {
+            flex-grow: 1;
+        }
+
+        select {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        button.action-btn {
+            background: #2a3325;
+            color: #9bcc7a;
+            border: 1px solid #5d7051;
+            padding: 8px;
+            font-family: inherit;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 3px;
+            text-transform: uppercase;
+            flex-grow: 1;
+            font-size: 13px;
+        }
+        
+        .btn-add {
+            background: #3e5231 !important;
+            color: #fff;
+        }
+
+        /* МОБИЛЬНАЯ АДАПТАЦИЯ (На весь экран) */
+        @media (max-width: 768px) {
+            .pda-wrapper {
+                width: 100vw;
+                height: 100vh;
+                height: 100dvh;
+                max-width: none;
+                max-height: none;
+                border: none;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 10px;
+                /* Безопасные зоны для вырезов экранa iOS */
+                padding-top: calc(10px + env(safe-area-inset-top));
+                padding-bottom: calc(10px + env(safe-area-inset-bottom));
+                padding-left: calc(10px + env(safe-area-inset-left));
+                padding-right: calc(10px + env(safe-area-inset-right));
+            }
+
+            .pda-screen {
+                border-width: 2px;
+            }
+
+            input[type="text"], select, button.action-btn {
+                font-size: 15px; /* Чуть крупнее для комфортного взаимодействия пальцем */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <audio id="logSound" src="pda_4LbLWWH.mp3" preload="auto"></audio>
+
+    <div class="pda-wrapper">
+        <div class="pda-header">
+            <div class="header-left">
+                <div class="pda-title">PDA // Logbook</div>
+                <div class="pda-date" id="headerDate">---</div>
+            </div>
+            <div class="header-controls">
+                <span class="log-counter" id="logCounter">0/250</span>
+                <button class="new-journal-btn" onclick="createNewJournal()" title="Новый журнал">✚ Новый</button>
+            </div>
+        </div>
+
+        <div class="filter-panel">
+            <input type="text" id="filterSearch" placeholder="Поиск..." oninput="renderLogs()">
+            <select id="filterColor" onchange="renderLogs()">
+                <option value="all">Все события</option>
+                <option value="normal">Обычные</option>
+                <option value="#a83232">Красные</option>
+                <option value="#b5651d">Оранжевые</option>
+                <option value="#a89f32">Желтые</option>
+                <option value="#458545">Зеленые</option>
+                <option value="#357a7a">Голубые</option>
+                <option value="#4b5d99">Синие</option>
+                <option value="#6e3b7b">Фиолетовые</option>
+                <option value="#a3a3a3">Белые</option>
+            </select>
+        </div>
+        
+        <div class="pda-screen">
+            <div class="logs-container" id="logContainer"></div>
+        </div>
+
+        <div class="input-panel">
+            <div class="input-row">
+                <input type="text" id="authorInput" placeholder="Позывной">
+                <input type="text" id="logInput" placeholder="Событие..." onkeypress="handleEnter(event)">
+            </div>
+            <div class="input-row">
+                <select id="colorSelect">
+                    <option value="normal">Обычное (Зеленый)</option>
+                    <option value="#a83232" style="color:#a83232; font-weight:bold;">Красный (Угроза)</option>
+                    <option value="#b5651d" style="color:#b5651d; font-weight:bold;">Оранжевый (Радиация)</option>
+                    <option value="#a89f32" style="color:#a89f32; font-weight:bold;">Желтый (Внимание)</option>
+                    <option value="#458545" style="color:#458545; font-weight:bold;">Зеленый (Система)</option>
+                    <option value="#357a7a" style="color:#357a7a; font-weight:bold;">Голубой (Аномалия)</option>
+                    <option value="#4b5d99" style="color:#4b5d99; font-weight:bold;">Синий (Статус)</option>
+                    <option value="#6e3b7b" style="color:#6e3b7b; font-weight:bold;">Фиолетовый (Пси)</option>
+                    <option value="#a3a3a3" style="color:#a3a3a3; font-weight:bold;">Белый (Инфо)</option>
+                </select>
+                <button class="action-btn btn-add" onclick="submitLog()">Записать</button>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="action-btn" onclick="exportBackup()">Экспорт файла</button>
+            <button class="action-btn" onclick="document.getElementById('fileUploader').click()">Импорт файла</button>
+            <input type="file" id="fileUploader" style="display:none" accept=".json" onchange="importBackup(event)">
+        </div>
+    </div>
+
+    <script>
+        // --- ГЕНЕРАЦИЯ PWA МАНИФЕСТА "НА ЛЕТУ" ---
+        const manifestData = {
+            "name": "PDA Logbook",
+            "short_name": "PDA",
+            "start_url": "./",
+            "display": "standalone",
+            "background_color": "#1a1a1a",
+            "theme_color": "#384232",
+            "icons": [
+                {
+                    "src": "https://api.iconify.design/lucide:terminal.svg?color=%239bcc7a",
+                    "sizes": "192x192 512x512",
+                    "type": "image/svg+xml"
+                }
+            ]
+        };
+        const stringManifest = JSON.stringify(manifestData);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        document.getElementById('pwaManifest').href = URL.createObjectURL(blob);
+
+        // Регистрация Service Worker для оффлайн режима
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                self.addEventListener('install', (e) => {
+                    self.skipWaiting();
+                });
+                self.addEventListener('activate', (e) => {
+                    e.waitUntil(clients.claim());
+                });
+                self.addEventListener('fetch', (e) => {
+                    e.respondWith(
+                        caches.match(e.request).then((response) => {
+                            return response || fetch(e.request);
+                        })
+                    );
+                });
+            `;
+            const swBlob = new Blob([swCode], {type: 'text/javascript'});
+            const swUrl = URL.createObjectURL(swBlob);
+            navigator.serviceWorker.register(swUrl).catch(() => {});
+        }
+        // ----------------------------------------
+
+        const logContainer = document.getElementById('logContainer');
+        const authorInput = document.getElementById('authorInput');
+        const logInput = document.getElementById('logInput');
+        const colorSelect = document.getElementById('colorSelect');
+        const logCounter = document.getElementById('logCounter');
+        const headerDate = document.getElementById('headerDate');
+        const filterSearch = document.getElementById('filterSearch');
+        const filterColor = document.getElementById('filterColor');
+        const logSound = document.getElementById('logSound');
+        
+        const MAX_LOGS = 250;
+        let logsMemory = []; 
+
+        window.onload = () => {
+            loadFromLocalStorage();
+            updateHeaderDate();
+            renderLogs();
+        };
+
+        function updateHeaderDate() {
+            const now = new Date();
+            const options = { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' };
+            headerDate.innerText = now.toLocaleDateString('ru-RU', options).toUpperCase();
+        }
+
+        function handleEnter(event) {
+            if (event.key === 'Enter') submitLog();
+        }
+
+        function updateCounter() {
+            logCounter.innerText = `${logsMemory.length}/${MAX_LOGS}`;
+        }
+
+        function playLogSound() {
+            if (logSound) {
+                logSound.currentTime = 0;
+                logSound.play().catch(e => {
+                    console.log("Автозапуск звука заблокирован браузером до первого клика", e);
+                });
+            }
+        }
+
+        function submitLog() {
+            const text = logInput.value.trim();
+            const author = authorInput.value.trim();
+            if (!text) return;
+
+            const selectedColor = colorSelect.value;
+            const isImportant = selectedColor !== 'normal';
+            
+            const now = new Date();
+            const timeString = `[${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}]`;
+            
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const dateString = `${day}.${month}.${year}`;
+
+            logsMemory.push({
+                id: Date.now(),
+                date: dateString,
+                time: timeString,
+                author: author,
+                text: text,
+                isImportant: isImportant,
+                color: selectedColor
+            });
+            
+            logInput.value = '';
+            saveToLocalStorage();
+            playLogSound();
+            renderLogs();
+            checkLimit();
+        }
+
+        function deleteLog(id) {
+            if (confirm("Удалить запись из журнала?")) {
+                logsMemory = logsMemory.filter(log => log.id !== id);
+                saveToLocalStorage();
+                renderLogs();
+            }
+        }
+
+        function changeLog(id) {
+            const logItem = logsMemory.find(log => log.id === id);
+            if (!logItem) return;
+
+            const newText = prompt("Корекция события:", logItem.text);
+            if (newText !== null) {
+                const trimmed = newText.trim();
+                if (trimmed !== "") {
+                    logItem.text = trimmed;
+                    saveToLocalStorage();
+                    renderLogs();
+                } else {
+                    alert("Текст не может быть пустым.");
+                }
+            }
+        }
+
+        function createNewJournal() {
+            if (logsMemory.length > 0) {
+                const wantSave = confirm("В текущем журнале есть записи!\nХотите сохранить их в файл перед созданием нового?");
+                if (wantSave) {
+                    exportBackup();
+                }
+            }
+
+            const confirmNew = confirm("Вы уверены, что хотите начать новый журнал? Все текущие несохраненные данные на экране будут стерты.");
+            if (confirmNew) {
+                logsMemory = [];
+                saveToLocalStorage();
+                renderLogs();
+            }
+        }
+
+        function renderLogs() {
+            logContainer.innerHTML = ''; 
+            
+            const searchText = filterSearch.value.toLowerCase().trim();
+            const selectedColorFilter = filterColor.value;
+
+            const filteredLogs = logsMemory.filter(log => {
+                const matchesSearch = 
+                    log.text.toLowerCase().includes(searchText) || 
+                    (log.author && log.author.toLowerCase().includes(searchText));
+
+                let matchesColor = true;
+                if (selectedColorFilter === 'normal') {
+                    matchesColor = !log.isImportant;
+                } else if (selectedColorFilter !== 'all') {
+                    matchesColor = log.isImportant && log.color === selectedColorFilter;
+                }
+
+                return matchesSearch && matchesColor;
+            });
+
+            let lastDate = '';
+
+            filteredLogs.forEach(log => {
+                if (log.date && log.date !== lastDate) {
+                    lastDate = log.date;
+                    const dateDivider = document.createElement('div');
+                    dateDivider.className = 'log-date-divider';
+                    dateDivider.innerText = `--- [ ${lastDate} ] ---`;
+                    logContainer.appendChild(dateDivider);
+                }
+
+                const logEntry = document.createElement('div');
+                const authorHTML = log.author ? `<span class="log-author">${log.author}</span>` : '';
+
+                if (log.isImportant) {
+                    logEntry.className = 'log-entry log-important';
+                    logEntry.style.setProperty('--event-color', log.color);
+                    logEntry.style.setProperty('--event-bg', log.color + '1a'); 
+                } else {
+                    logEntry.className = 'log-entry log-normal';
+                }
+                
+                logEntry.innerHTML = `
+                    <div class="log-content">
+                        <span class="log-time">${log.time}</span> ${authorHTML} ${log.text}
+                    </div>
+                    <div class="log-actions">
+                        <button class="delete-btn" title="Удалить запись" onclick="deleteLog(${log.id})">[DEL]</button>
+                        <button class="change-btn" title="Изменить запись" onclick="changeLog(${log.id})">[C]</button>
+                    </div>
+                `;
+                
+                logContainer.appendChild(logEntry);
+            });
+            
+            logContainer.scrollTop = logContainer.scrollHeight;
+            updateCounter();
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('pda_logs', JSON.stringify(logsMemory));
+        }
+
+        function loadFromLocalStorage() {
+            const saved = localStorage.getItem('pda_logs');
+            if (saved) {
+                try {
+                    logsMemory = JSON.parse(saved);
+                } catch(e) {
+                    logsMemory = [];
+                }
+            }
+        }
+
+        function checkLimit() {
+            if (logsMemory.length >= MAX_LOGS) {
+                alert(`Память заполнена (${MAX_LOGS} записей). Автоматическое создание бэкапа.`);
+                exportBackup();
+                logsMemory = [];
+                saveToLocalStorage();
+                renderLogs();
+            }
+        }
+
+        function exportBackup() {
+            if (logsMemory.length === 0) {
+                alert("Журнал пуст.");
+                return;
+            }
+            const dataStr = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logsMemory, null, 2));
+            const dlAnchorElem = document.createElement('a');
+            dlAnchorElem.setAttribute("href", dataStr);
+            dlAnchorElem.setAttribute("download", `PDA_Backup_${Date.now()}.json`);
+            document.body.appendChild(dlAnchorElem);
+            dlAnchorElem.click();
+            document.body.removeChild(dlAnchorElem);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (Array.isArray(loadedData)) {
+                        logsMemory = loadedData;
+                        saveToLocalStorage();
+                        renderLogs();
+                        event.target.value = '';
+                        alert("Журнал успешно загружен!");
+                    }
+                } catch (error) { alert("Ошибка чтения файла."); }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+</body>
+</html>
